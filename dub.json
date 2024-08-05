@@ -1,0 +1,17 @@
+{
+	"authors": [
+		"Ate Eskola"
+	],
+	"copyright": "Tekijänoikeus © 2024, Eskolan koodipaja",
+	"dependencies": {
+		"vibe-d": "~>0.10.0",
+		"vibe-stream:tls": "*"
+	},
+	"subConfigurations":
+	{	"vibe-stream:tls": "openssl-3.0"
+	},
+	"description": "Palvelin *.ate-eskola.fi",
+	"license": "MIT",
+	"name": "ate-eskola-dotfi",
+	"targetName": "ate-eskola.fi"
+}
