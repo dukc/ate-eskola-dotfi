@@ -19,13 +19,20 @@
 # in the templates via {{ site.myvariable }}.
 
 title: Eskolan Koodipaja
+author: Ate Eskola
 email: ajieskola@gmail.com
+postaddress1: Saratie 5 b 3
+postaddress2: 85500 Nivala
 description: >-
   Eskolan Koodipajan kotisivut.
 baseurl: ""
 url: "https://koodipaja.ate-eskola.fi"
 github_username: dukc
 theme: minima
+header_pages:
+  - "mies.markdown"
+  - "näytöt.markdown"
+  - "sivu.markdown"
 
 # Exclude from processing.
 # The following items will not be processed, by default.
