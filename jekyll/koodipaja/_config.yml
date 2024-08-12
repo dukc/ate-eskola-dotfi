@@ -30,9 +30,10 @@ url: "https://koodipaja.ate-eskola.fi"
 github_username: dukc
 theme: minima
 header_pages:
-  - "mies.markdown"
-  - "näytöt.markdown"
-  - "sivu.markdown"
+  - "palvelut.md"
+  - "mies.md"
+  - "näytöt.md"
+  - "sivu.md"
 
 # Exclude from processing.
 # The following items will not be processed, by default.
