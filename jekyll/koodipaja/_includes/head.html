@@ -5,4 +5,9 @@
   {%- seo -%}
   <link rel="stylesheet" href="{{ "/assets/main.css" | relative_url }}">
   {%- feed_meta -%}
+  {%- if page.dscript -%}
+    <script type="dlang">
+      {{ page.dscript }}
+    </script>
+  {%- endif -%}
 </head>
