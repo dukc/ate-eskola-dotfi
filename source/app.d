@@ -30,8 +30,6 @@ struct Config
 	string database;
 }
 
-void main(string[] args) => Globals().main(args);
-
 struct Globals
 {	import dpq.connection;
 	import dpq.exception;
@@ -42,55 +40,87 @@ struct Globals
 	import libpq.libpq;
 
 	Connection database;
-	bool databaseOk() => database.status == CONNECTION_OK;
-
-	void main(string[] args)
-	{	try
-		{	database = Connection(config.database);
-			writeln("Tietokantaan yhdistäminen onnistui.");
-		} catch(DPQException e)
-		{	writeln("Tietokantaan yhdistäminen epäonnistui: ", e.message);
-		}
-
-		auto settings = new HTTPServerSettings(config.addr);
-		//auto router = new URLRouter;
-		listenHTTP(settings, serve());
-		writeln("CTRL-C lopettaaksesi");
-
-		// Tietokannan toimivuuden pikatesti
-		version (none) if (databaseOk)
-		{	auto results = Query(database, "select * from visitors;").run();
-			foreach(row; results)
-			{	import std.array;
-				row
-					.repeat
-					.zip(iota(4))
-					.map!(bind!((val, index) => val[index].as!string.get("NULL")))
-					.join(", ")
-					.writeln;
-			}
-		}
-
-		runApplication();
-	}
+	@trusted bool databaseOk() => database.status == CONNECTION_OK;
 }
 
-@safe void delegate(Req, Res) @safe serve()
+void main(string[] args)
+{	import dpq.connection;
+	import dpq.exception;
+	import dpq.value;
+	import dpq.attributes;
+	import dpq.result;
+	import libpq.libpq;
+	import ateeskola.fi.dbq;
+
+	// Antaa vakiota paremman virheviestin jos tulee viitattua
+	// laittomaan muistiin Linuxissa
+	import etc.linux.memoryerror;
+	static if (is(typeof(registerMemoryErrorHandler))) registerMemoryErrorHandler();
+
+	Globals globals;
+
+	try
+	{	globals.database = Connection(config.database);
+		writeln("Tietokantaan yhdistäminen onnistui.");
+	} catch(DPQException e)
+	{	writeln("Tietokantaan yhdistäminen epäonnistui: ", e.message);
+	}
+
+	auto settings = new HTTPServerSettings(config.addr);
+	//auto router = new URLRouter;
+	listenHTTP(settings, serve(globals));
+	writeln("CTRL-C lopettaaksesi");
+
+	// Tietokannan toimivuuden pikatesti
+	version (None) if (globals.databaseOk)
+	{	auto results = Query(globals.database, "select * from visitors;").myRun();
+		foreach(row; results)
+		{	import std.array;
+			row
+				.repeat
+				.zip(iota(4))
+				.map!(bind!((val, index) => val[index].as!string.get("NULL")))
+				.join(", ")
+				.writeln;
+		}
+	}
+
+	runApplication();
+}
+
+@safe void delegate(Req, Res) @safe serve(ref Globals globals)
 {	import std.algorithm, std.file, std.functional, std.range;
 
+	import ateeskola.fi.dbq;
+
+	auto visitorQuery = globals.database.Query("select name, public_message, time from visitors order by time asc limit $1 offset $2;");
+	auto visitorLenQuery = globals.database.Query("select count(*) from visitors;");
 	auto visitorLogServer = servePreprocessed!"koodipaja/vieraat/index.html"((req) @safe
 	{	import std.datetime;
-		if ("pagenum" !in req.form) req.form["pagenum"] = "1";
-
-		string parseInput = req.form["pagenum"];
 		VisitorLogModel result;
-		result.pageNumber = parse!int(parseInput);
-		if(!parseInput.empty) result.pageNumber = -1;
 
-		result.shownVisitors =
-		[	result.Entry("Hannu", "terve", cast(DateTime) Clock.currTime() - 30.minutes),
-			result.Entry("Kerttu", "horo", cast(DateTime) Clock.currTime() - 30.seconds)
-		];
+		if ("pagenum" !in req.params)
+		{	//debug writeln(cast(void[]) [visitorLenQuery]);
+			if (globals.databaseOk) result.pageNumber =
+				visitorLenQuery.myRun().front[0].as!int.get() % result.pageSize + 1;
+			else result.pageNumber = 1;
+		} else
+		{	string parseInput = req.params["pagenum"];
+
+			try result.pageNumber = parse!int(parseInput);
+			catch(ConvException) result.pageNumber = -1;
+		}
+
+		if (globals.databaseOk)
+		{	auto visitorQueryResults = visitorQuery.myRun(result.pageSize,
+				result.pageSize * (result.pageNumber - 1));
+
+			result.shownVisitors = visitorQueryResults.map!(dbEntry => result.Entry
+			(	dbEntry[0].asString.get(""),
+				dbEntry[1].asString.get(""),
+				dbEntry[2].as!SysTime.get
+			)).array;
+		}
 
 		return result;
 	});
@@ -102,18 +132,18 @@ struct Globals
 		}
 
 		visitorLogServer(req, res);
-		// Jos visitorLogServer ei saanut kirjoitettua.
-		res.writeBody("", 404);
 	}
 
 	auto rootRouter = (new URLRouter)
 		.get("/", servePreprocessed!"juuri/index.html"(req => PersonalIndexModel(config.companyUrl)))
 		.get("*", serveStaticFiles("views/juuri"));
 	auto compRouter = (new URLRouter)
-		.get("vieraat/", &serveVisitorLog)
-		.get("vieraat/:pagenum", &serveVisitorLog)
-		.post("vieraat/", &serveVisitorLog)
-		.post("vieraat/:pagenum", &serveVisitorLog)
+		.get("/vieraat", &serveVisitorLog)
+		.get("/vieraat/", &serveVisitorLog)
+		.get("/vieraat/:pagenum", &serveVisitorLog)
+		.post("/vieraat", &serveVisitorLog)
+		.post("/vieraat/", &serveVisitorLog)
+		.post("/vieraat/:pagenum", &serveVisitorLog)
 		.get("*", serveStaticFiles("views/koodipaja"));
 
 	auto rootMatcher = regex(config.rootHostnameRegex, "i");
@@ -140,12 +170,13 @@ struct VisitorLogModel
 	static struct Entry
 	{	string name;
 		string message;
-		DateTime time;
+		SysTime time;
 	}
 
 	@safe processable() => pageNumber > 0;
 	int pageNumber;
 	Entry[] shownVisitors;
+	enum int pageSize = 40;
 }
 
 
@@ -198,4 +229,6 @@ template HtmlDScript(string path, Args)
 	return closingTag[0].source;
 
 }
+
+// Nämä ovat luullakseni muistiturvallisia
 
