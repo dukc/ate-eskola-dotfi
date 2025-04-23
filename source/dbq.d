@@ -1,7 +1,11 @@
+// dbq-kirjastoa ei ole merkitty muistiturvalliseksi vaikka se uskoakseni
+// pääosin on. Tämä moduuli sisältää koodia että sitä voisi käyttää turvallisesti.
+
 module ateeskola.fi.dbq;
 
-// dbq-kirjastoa ei ole merkitty muistiturvalliseksi vaikka se uskoakseni ainakin
-// pääosin on. Tämä moduuli sisältää koodia että sitä voisi käyttää turvallisesti.
+import std.typecons;
+
+
 
 @trusted Query(ref imported!"dpq.connection".Connection conn, string command)
 => imported!"dpq.query".Query(conn, command);
@@ -32,9 +36,14 @@ struct QueryRow
 	auto opIndex(T)(T col) => impl.opIndex(col);
 }
 
-// Vähän kyseenalaista merkitä tämä muistiturvalliseksi, koska palautettu string
+// as!stringin paluuarvo
 // joka saa viitata vain muuttumattomaan muistiin viittaa potentiaalisesti
-// muuttuvaan ubyte[]-tyyppiseen muistiin (Valuen kenttä). Kenttä on kuitenkin
-// yksityinen joten kaitpa se on kyllin hyvin suojattu muutoksilta.
-@trusted pure auto asString(imported!"dpq.value".Value val)
-=> val.as!string;
+// muuttuvaan ubyte[]-tyyppiseen muistiin (Valuen kenttä). Kenttä on yksityinen
+// mutta tupleofilla siihen pääsisi käsiksi joten tarkasti ottaen as!string ei
+// ole muistiturvallinen. Siksi kopioin paluuarvon (idup) ennen kuin palautan
+// sen edelleen.
+@trusted pure Nullable!string asString(imported!"dpq.value".Value val)
+{	auto result = val.as!string;
+	if (!result.isNull) result = result.get.idup.nullable;
+	return result;
+}

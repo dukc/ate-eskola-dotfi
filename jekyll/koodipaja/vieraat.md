@@ -7,7 +7,8 @@ dscript: >-
         import std.array, std.meta, std.range, std.sumtype, std.typecons,
             std.utf, std.uni;
 
-        enum Placeholder {pageNum, pageNext, pagePrev, rows}
+        enum Placeholder {pageNum, pageNext, pagePrev,
+            name, pubMsg, privMsg, rows, error}
         alias Output = SumType!(string, Placeholder);
 
         Output[] outputs;
@@ -43,9 +44,9 @@ dscript: >-
         @safe run(Args args){
             string rows = args.shownVisitors.map!(row =>
                     "\t<tr>\n\t\t<td>" ~
-                    row.name ~
+                    htmlEscape(row.name) ~
                     "</td>\n\t\t<td>" ~
-                    row.message ~
+                    htmlEscape(row.message) ~
                     "</td>\n\t\t<td>" ~
                     text(
                         row.time.hour, ".", row.time.minute.pipe!(m => (m < 10? "0": "") ~ text(m)), " ",
@@ -58,12 +59,18 @@ dscript: >-
                     args.pageNumber.text,
                     (args.pageNumber + 1).text,
                     (args.pageNumber - 1).text,
-                    rows
+                    htmlAttribEscape(args.formName),
+                    htmlAttribEscape(args.formPubMsg),
+                    htmlAttribEscape(args.formPrivMsg),
+                    rows,
+                    args.errorHTML
                 ][ph])
             ));
         }
     }
 ---
+
+$ERROR
 
 <table>
     <tr>
@@ -74,7 +81,7 @@ dscript: >-
     $ROWS
 </table>
 
-<form action="/vieraat/$PAGENUM" action="post">
+<form action="/vieraat/$PAGENUM" method="post">
     <h1> Kirjoita oma päiväyksesi </h1>
     <p>
         <label for="name">Nimi</label>
@@ -82,11 +89,11 @@ dscript: >-
     </p>
     <p>
         <label for="public_message">Julkiset terveiset</label><br />
-        <input type="text" id="public_message" name="public_message" value="$PUBMSG" />
+        <textarea id="public_message" name="public_message">$PUBMSG</textarea>
     </p>
     <p>
         <label for="private_message">Yksityiset terveiset</label><br />
-        <input type="text" id="private_message" name="private_message" value="$PRIVMSG" />
+        <textarea id="private_message" name="private_message">$PRIVMSG</textarea>
     </p>
     <p>
         <button type="submit">Kirjoita</button>

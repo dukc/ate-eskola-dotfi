@@ -41,6 +41,8 @@ struct Globals
 
 	Connection database;
 	@trusted bool databaseOk() => database.status == CONNECTION_OK;
+
+	long databaseAllowance;
 }
 
 void main(string[] args)
@@ -94,14 +96,14 @@ void main(string[] args)
 	import ateeskola.fi.dbq;
 
 	auto visitorQuery = globals.database.Query("select name, public_message, time from visitors order by time asc limit $1 offset $2;");
+	auto visitorInsertion = globals.database.Query("insert into visitors (name, public_message, private_message, time) values ($1, $2, $3, $4);");
 	auto visitorLenQuery = globals.database.Query("select count(*) from visitors;");
 	auto visitorLogServer = servePreprocessed!"koodipaja/vieraat/index.html"((req) @safe
 	{	import std.datetime;
 		VisitorLogModel result;
 
 		if ("pagenum" !in req.params)
-		{	//debug writeln(cast(void[]) [visitorLenQuery]);
-			if (globals.databaseOk) result.pageNumber =
+		{	if (globals.databaseOk) result.pageNumber =
 				visitorLenQuery.myRun().front[0].as!int.get() % result.pageSize + 1;
 			else result.pageNumber = 1;
 		} else
@@ -109,6 +111,17 @@ void main(string[] args)
 
 			try result.pageNumber = parse!int(parseInput);
 			catch(ConvException) result.pageNumber = -1;
+		}
+
+		if(req.params["error"].length > 0)
+		{	result.errorHTML ~= req.params["error"];
+
+			// Kun kerta tuli virhe, lähetetään käyttäjän lomake takaisin
+			// jottei hänen tarvitse jälleenkirjoittaa sitä alusta mikäli
+			// hän haluaa yrittää lähettää sen uudelleen.
+			result.formName = req.form.get("name", "");
+			result.formPubMsg = req.form.get("public_message", "");
+			result.formPrivMsg = req.form.get("private_message", "");
 		}
 
 		if (globals.databaseOk)
@@ -120,17 +133,48 @@ void main(string[] args)
 				dbEntry[1].asString.get(""),
 				dbEntry[2].as!SysTime.get
 			)).array;
-		}
+		} else result.errorHTML ~= "<error>Tietokantaan ei ole yhteyttä, joten vieraskirjaa ei voi valitettavasti näyttää.</error>";
 
 		return result;
 	});
 
+	// Sisältää @trusted-koodia
 	@safe void serveVisitorLog(Req req, Res res)
 	{	import std.datetime;
+		import dpq.exception;
+
+		req.params["error"] = "";
 		if(req.method == HTTPMethod.POST) {
-			writeln("posting");
+			if(!globals.databaseOk)
+			{
+				req.params["error"] = req.params["error"]
+				~ "<error>Tietokantaan ei saada yhteyttä, joten vieraskirjaan kirjoitus ei valitettavasti onnistunut.</error>\n";
+				goto postingDone;
+			}
+
+			if("name" !in req.form
+				|| "public_message" !in req.form
+				|| "private_message" !in req.form )
+			{
+				req.params["error"] = req.params["error"]
+				~ "<error>Lähetetystä nettilomakkeesta puuttuu kenttiä. "
+				~ "Jos yritit kirjoittaa vieraskirjaan normaalisti painamalla "
+				~ "nappia alempana, tämän ei pitäisi tapahtua. Sivustossa "
+				~ "(tai selaimessasi, epätodennäköistä) on siinä "
+				~ "tapauksessa vika.</error>\n";
+				goto postingDone;
+			}
+
+			try visitorInsertion.myRun(req.form["name"],
+				req.form["public_message"],
+				req.form["private_message"],
+				Clock.currTime());
+			catch (DPQException e) () @trusted
+			{	req.params["error"] = req.params["error"] ~ e.toString;
+			}();
 		}
 
+		postingDone:
 		visitorLogServer(req, res);
 	}
 
@@ -159,6 +203,10 @@ void main(string[] args)
 	};
 }
 
+@safe pure long estimateVisitorEntrySize(typeof(Req.form) form)
+=> VisitorLogModel.Entry.sizeof + form["name"].length +
+	form["public_message"].length + form["private_message"].length;
+
 struct PersonalIndexModel
 {	string companyUrl;
 	enum processable = true;
@@ -176,7 +224,13 @@ struct VisitorLogModel
 	@safe processable() => pageNumber > 0;
 	int pageNumber;
 	Entry[] shownVisitors;
+	string errorHTML;
+	string formName;
+	string formPubMsg;
+	string formPrivMsg;
 	enum int pageSize = 40;
+
+
 }
 
 
@@ -229,6 +283,4 @@ template HtmlDScript(string path, Args)
 	return closingTag[0].source;
 
 }
-
-// Nämä ovat luullakseni muistiturvallisia
 
