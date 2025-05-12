@@ -28,6 +28,15 @@ struct Config
     // Sivu toimii tietokantaa vaativia funktioita lukuunottamatta vaikka
     // tämä jättää tyhjäksi (tai virheelliseen arvoon).
 	string database;
+	// Miten paljon tietokantakiintiö kasvaa tavuina per 10 sekuntia.
+	// sivu kieltäytyy ottamasta lisäpäivityksiä asiakkailta jos
+	// tietokantakiintiö ylittyy. Ei välttämättä pidä tarkasti
+	// paikkansa - tietojen koot perustuvat karkeisiin arvioihin.
+	long databaseAllowancePerDsec;
+	// Tietokantakiintiön maksimiarvo, eli miten paljon tietokanta voi
+	// maksimissaan kasvaa lyhyessä ajassa. Ylempi asetus täydentää vähennyttä
+	// kunnes se on taas tässä arvossa.
+	long databaseAllowanceMax;
 }
 
 struct Globals
@@ -52,7 +61,7 @@ void main(string[] args)
 	import dpq.attributes;
 	import dpq.result;
 	import libpq.libpq;
-	import ateeskola.fi.dbq;
+	import ateeskola.fi.dpq;
 
 	// Antaa vakiota paremman virheviestin jos tulee viitattua
 	// laittomaan muistiin Linuxissa
@@ -64,6 +73,7 @@ void main(string[] args)
 	try
 	{	globals.database = Connection(config.database);
 		writeln("Tietokantaan yhdistäminen onnistui.");
+		globals.databaseAllowance = config.databaseAllowanceMax;
 	} catch(DPQException e)
 	{	writeln("Tietokantaan yhdistäminen epäonnistui: ", e.message);
 	}
@@ -87,13 +97,23 @@ void main(string[] args)
 		}
 	}
 
+	runTask(
+	{	while(true) try
+		{	sleep(10.seconds);
+			globals.databaseAllowance = min
+			(	globals.databaseAllowance + config.databaseAllowancePerDsec,
+				config.databaseAllowanceMax
+			);
+		} catch(Exception) assert(false);
+	});
+
 	runApplication();
 }
 
 @safe void delegate(Req, Res) @safe serve(ref Globals globals)
 {	import std.algorithm, std.file, std.functional, std.range;
 
-	import ateeskola.fi.dbq;
+	import ateeskola.fi.dpq;
 
 	auto visitorQuery = globals.database.Query("select name, public_message, time from visitors order by time asc limit $1 offset $2;");
 	auto visitorInsertion = globals.database.Query("insert into visitors (name, public_message, private_message, time) values ($1, $2, $3, $4);");
@@ -104,7 +124,7 @@ void main(string[] args)
 
 		if ("pagenum" !in req.params)
 		{	if (globals.databaseOk) result.pageNumber =
-				visitorLenQuery.myRun().front[0].as!int.get() % result.pageSize + 1;
+				cast(int) visitorLenQuery.myRun().front[0].as!long.get() / result.pageSize + 1;
 			else result.pageNumber = 1;
 		} else
 		{	string parseInput = req.params["pagenum"];
@@ -165,13 +185,31 @@ void main(string[] args)
 				goto postingDone;
 			}
 
+			auto entrySize = req.form.estimateVisitorEntrySize;
+
+			if(entrySize > globals.databaseAllowance)
+			{	req.params["error"] = req.params["error"]
+				~ "<error>Vieraskirja on ruuhkautunut, tai "
+				~ "palvelunestohyökkäyksen kohteena eikä siksi "
+				~ "hyväksynyt päivitystä. Voit yrittää lyhentää terveisiäsi "
+				~ "tai yrittää hetken kuluttua uudelleen</error>";
+				goto postingDone;
+			}
+
 			try visitorInsertion.myRun(req.form["name"],
 				req.form["public_message"],
 				req.form["private_message"],
 				Clock.currTime());
-			catch (DPQException e) () @trusted
-			{	req.params["error"] = req.params["error"] ~ e.toString;
-			}();
+			catch (DPQException e)
+			{	() @trusted
+				{ 	req.params["error"] = req.params["error"]
+					~ "<error> Tietokantahäiriö: "
+					~ e.toString.htmlEscape ~ "</error>";
+				}();
+				goto postingDone;
+			}
+
+			globals.databaseAllowance -= entrySize;
 		}
 
 		postingDone:
@@ -229,16 +267,11 @@ struct VisitorLogModel
 	string formPubMsg;
 	string formPrivMsg;
 	enum int pageSize = 40;
-
-
 }
-
-
 
 /+@safe void delegate(Req, Res) @safe servePersonalIndex(string path)(PersonalIndexModel)
 {	return (reg, res) => {};
 }+/
-
 
 @safe void delegate(Req, Res) @safe servePreprocessed(string path, Model)(Model delegate(Req) @safe controller)
 {	import std.file;
@@ -259,8 +292,10 @@ template HtmlDScript(string path, Args)
 {	mixin(getDScript(import(path)));
 }
 
-// Huonosti tehty - pitäisi käyttää oikeaa HTML-lukijaa. Tämä voi mm. erehtyä sen mukaan
-// miten välilyönnit on sijoitettu eikä ota huomioon lainausmerkkejä tai mitään.
+// Hakee D-koodin HTML-tiedostosta.
+// Huonosti tehty - pitäisi käyttää oikeaa HTML- tai XML-lukijaa. Tämä voi mm.
+// erehtyä sen mukaan miten välilyönnit on sijoitettu eikä ota
+// huomioon lainausmerkkejä tai mitään.
 @safe pure string getDScript(string from)
 {	import std.algorithm, std.range, std.utf;
 	auto search = from.byCodeUnit;

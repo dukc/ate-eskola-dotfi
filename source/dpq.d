@@ -1,7 +1,7 @@
 // dbq-kirjastoa ei ole merkitty muistiturvalliseksi vaikka se uskoakseni
 // pääosin on. Tämä moduuli sisältää koodia että sitä voisi käyttää turvallisesti.
 
-module ateeskola.fi.dbq;
+module ateeskola.fi.dpq;
 
 import std.typecons;
 
