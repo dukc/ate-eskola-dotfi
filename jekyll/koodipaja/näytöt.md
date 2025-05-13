@@ -24,10 +24,8 @@ esimerkkinä [tämä suurehko](https://github.com/dlang/phobos/pull/8657)
 Unicode-algoritmin korjaus. Osasin tehdä sen koska Unicode tuli niin tutuksi
 työn kautta Symmetryllä.
 
-Olen tehnyt tämän sivun ja sen palvelinsovelluksen [itse](/sivu). Vaikka tämä
-ei kuulu suurimpiin teknisiin saavutuksiini sivun ollessa varsin yksinkertainen,
-lähdekoodi on kuitenkin luettavissa mikäli haluat saada nopean näyteen
-työstäni.
+Olen tehnyt tämän sivun ja sen palvelinsovelluksen [itse](/sivu). Lähdekoodi on
+luettavissa mikäli haluat saada nopean näyteen työstäni.
 
 Olen saanut luvan käyttää [Ohjelmointi Asko
 Rajamäkeä](https://askorajamaki.fi/) (jolle olin työharjoittelussa vielä

@@ -49,9 +49,14 @@ struct Globals
 	import libpq.libpq;
 
 	Connection database;
-	@trusted bool databaseOk() => database.status == CONNECTION_OK;
+	// Connectionissa ei ole virallisen olista keinoa tarkistaa onko sitä
+	// alustettu ollenkan (database.status kaatuu jos ei) joten tarvitaan
+	// erillinen muuttuja siitä kärryillä pysymiseksi.
+	bool databaseInitialised;
+	@trusted bool databaseOk() => databaseInitialised && database.status == CONNECTION_OK;
 
 	long databaseAllowance;
+
 }
 
 void main(string[] args)
@@ -74,6 +79,7 @@ void main(string[] args)
 	{	globals.database = Connection(config.database);
 		writeln("Tietokantaan yhdistäminen onnistui.");
 		globals.databaseAllowance = config.databaseAllowanceMax;
+		globals.databaseInitialised = true;
 	} catch(DPQException e)
 	{	writeln("Tietokantaan yhdistäminen epäonnistui: ", e.message);
 	}
