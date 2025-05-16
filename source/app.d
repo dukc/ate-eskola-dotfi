@@ -74,15 +74,10 @@ void main(string[] args)
 	static if (is(typeof(registerMemoryErrorHandler))) registerMemoryErrorHandler();
 
 	Globals globals;
+	globals.databaseAllowance = config.databaseAllowanceMax;
 
-	try
-	{	globals.database = Connection(config.database);
-		writeln("Tietokantaan yhdistäminen onnistui.");
-		globals.databaseAllowance = config.databaseAllowanceMax;
-		globals.databaseInitialised = true;
-	} catch(DPQException e)
-	{	writeln("Tietokantaan yhdistäminen epäonnistui: ", e.message);
-	}
+	if(globals.connectDatabase()) writeln("Tietokantaan yhdistäminen onnistui.");
+	else writeln("Tietokantaan yhdistäminen epäonnistui.");
 
 	auto settings = new HTTPServerSettings(config.addr);
 	//auto router = new URLRouter;
@@ -106,6 +101,7 @@ void main(string[] args)
 	runTask(
 	{	while(true) try
 		{	sleep(10.seconds);
+			if(!globals.databaseOk) globals.connectDatabase();
 			globals.databaseAllowance = min
 			(	globals.databaseAllowance + config.databaseAllowancePerDsec,
 				config.databaseAllowanceMax
@@ -126,11 +122,21 @@ void main(string[] args)
 	auto visitorLenQuery = globals.database.Query("select count(*) from visitors;");
 	auto visitorLogServer = servePreprocessed!"koodipaja/vieraat/index.html"((req) @safe
 	{	import std.datetime;
+		import dpq.exception;
+
 		VisitorLogModel result;
 
 		if ("pagenum" !in req.params)
-		{	if (globals.databaseOk) result.pageNumber =
+		{	if (globals.databaseOk) try result.pageNumber =
 				cast(int) visitorLenQuery.myRun().front[0].as!long.get() / result.pageSize + 1;
+			catch (DPQException e)
+			{	() @trusted
+				{ 	result.errorHTML ~= "<error>Tietokantahäiriö: "
+					~ e.toString.htmlEscape ~ "</error>";
+				}();
+
+				result.pageNumber = 1;
+			}
 			else result.pageNumber = 1;
 		} else
 		{	string parseInput = req.params["pagenum"];
@@ -150,16 +156,24 @@ void main(string[] args)
 			result.formPrivMsg = req.form.get("private_message", "");
 		}
 
-		if (globals.databaseOk)
+		if (globals.databaseOk) try
 		{	auto visitorQueryResults = visitorQuery.myRun(result.pageSize,
 				result.pageSize * (result.pageNumber - 1));
+
 
 			result.shownVisitors = visitorQueryResults.map!(dbEntry => result.Entry
 			(	dbEntry[0].asString.get(""),
 				dbEntry[1].asString.get(""),
 				dbEntry[2].as!SysTime.get
 			)).array;
-		} else result.errorHTML ~= "<error>Tietokantaan ei ole yhteyttä, joten vieraskirjaa ei voi valitettavasti näyttää.</error>";
+		} catch (DPQException e)
+		{	() @trusted
+			{ 	result.errorHTML ~= "<error> Tietokantahäiriö: "
+				~ e.toString.htmlEscape ~ "</error>";
+			}();
+		} else if (result.errorHTML == "") result.errorHTML ~= "<error>Tietokantaan ei ole yhteyttä, joten "
+			~ "vieraskirjaa ei voi valitettavasti näyttää. Uudelleen "
+			~ "yrittäminen hetken kuluttua voi auttaa.</error>";
 
 		return result;
 	});
@@ -172,9 +186,10 @@ void main(string[] args)
 		req.params["error"] = "";
 		if(req.method == HTTPMethod.POST) {
 			if(!globals.databaseOk)
-			{
-				req.params["error"] = req.params["error"]
-				~ "<error>Tietokantaan ei saada yhteyttä, joten vieraskirjaan kirjoitus ei valitettavasti onnistunut.</error>\n";
+			{	req.params["error"] = req.params["error"]
+				~ "<error>Tietokantaan ei saada yhteyttä, joten vieraskirjaan kirjoitus "
+				~ "ei valitettavasti onnistunut. Uudelleen yrittäminen "
+				~ "hetken kuluttua voi auttaa.</error>\n";
 				goto postingDone;
 			}
 
@@ -245,6 +260,18 @@ void main(string[] args)
 		else if(urlHost.matchFirst(compMatcher).equal(urlHost.only))
 			compRouter.handleRequest(req, res);
 	};
+}
+
+@trusted bool connectDatabase(ref Globals globals)
+{	import dpq.connection;
+	import dpq.exception;
+	try
+	{	globals.database = Connection(config.database);
+		globals.databaseInitialised = true;
+		return true;
+	} catch(DPQException e)
+	{	return false;
+	}
 }
 
 @safe pure long estimateVisitorEntrySize(typeof(Req.form) form)
