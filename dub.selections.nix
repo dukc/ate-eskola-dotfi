@@ -14,14 +14,14 @@
 } {
   fetch = {
     type = "git";
-    url = "https://github.com/vibe-d/vibe-stream.git";
-    rev = "v1.1.0";
-    sha256 = "0nqm25m88mr04sf858wcan12sdlasks11h4im2awc8kjhqpz8iaf";
+    url = "https://github.com/IrenejMarc/dpq.git";
+    rev = "v0.11.6";
+    sha256 = "0w6lh4vx5z095imljji8c3s4x4zixdzi62hivy9ig0rqvgj7cvlx";
     fetchSubmodules = false;
-    date = "2024-02-20T09:13:26+01:00";
+    date = "2022-06-04T11:22:35+02:00";
     deepClone = false;
     leaveDotGit = false;
-    path = "/nix/store/bkk24fidlnjnl1kg4rx39m0fllhllrrh-vibe-stream";
+    path = "/nix/store/fiaqzivcsl7p70afp3b6cd00azq0iaaz-dpq";
   };
 } {
   fetch = {
@@ -86,6 +86,18 @@
 } {
   fetch = {
     type = "git";
+    url = "https://github.com/vibe-d/vibe-stream.git";
+    rev = "v1.1.0";
+    sha256 = "0nqm25m88mr04sf858wcan12sdlasks11h4im2awc8kjhqpz8iaf";
+    fetchSubmodules = false;
+    date = "2024-02-20T09:13:26+01:00";
+    deepClone = false;
+    leaveDotGit = false;
+    path = "/nix/store/bkk24fidlnjnl1kg4rx39m0fllhllrrh-vibe-stream";
+  };
+} {
+  fetch = {
+    type = "git";
     url = "https://github.com/vibe-d/vibe-http.git";
     rev = "v1.1.1";
     sha256 = "0nls9y8h74xrn8vv6r1gq2n5lgmri1xwyxmrlxfxrfkwqzqknb74";
@@ -138,7 +150,7 @@
     rev = "v3.3.3";
     sha256 = "1634j4psp3qwgwhk2sa3jj6gvwv3i96hpg2wrdy9ihjhabnszn0f";
     fetchSubmodules = false;
-    date = "2023-09-14T12:05:32+00:00";
+    date = "2023-09-14T12:05:32Z";
     deepClone = false;
     leaveDotGit = false;
     path = "/nix/store/i3pgh154r80xvh4vsnl6srg6khmk5dg7-openssl";

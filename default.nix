@@ -14,6 +14,7 @@
     }}/mkDub.nix" { inherit pkgs; dmd = dlang-nix.dmd-2_105_2; };
 in mkDub.mkDubDerivation {
     src = ./.;
+    dubFlags = "--temp-build";
     buildInputs = [ pkgs.openssl pkgs.postgresql ];
     inherit buildType;
 }

@@ -4,8 +4,8 @@ with pkgs.stdenv; let
   { name= "initData";
     src= ./.;
     installPhase = ''
-      mkdir -p $out/share/ate-eskola.fi/data
-      cp -r data/. $out/share/ate-eskola.fi/data
+      mkdir -p $out/share/ate-eskola.fi/views
+      cp -r views/. $out/share/ate-eskola.fi/views
     '';
   };
   # Jos Cloudplatform.fi ei jostain syystä katsele ilman kantakuvaa tehtyjä
