@@ -76,8 +76,10 @@ void main(string[] args)
 	Globals globals;
 	globals.databaseAllowance = config.databaseAllowanceMax;
 
-	if(globals.connectDatabase()) writeln("Tietokantaan yhdistäminen onnistui.");
-	else writeln("Tietokantaan yhdistäminen epäonnistui.");
+	if(auto err = globals.connectDatabase())
+	{	writeln("Tietokantaan yhdistäminen epäonnistui.");
+		err.writeln();
+	} else writeln("Tietokantaan yhdistäminen onnistui.");
 
 	auto settings = new HTTPServerSettings(config.addr);
 	//auto router = new URLRouter;
@@ -99,14 +101,30 @@ void main(string[] args)
 	}
 
 	runTask(
-	{	while(true) try
+	{	// Jos ei nolla, ei kirjoiteta lokiin potentiaalisesti jatkuvasti
+		// toistuvia pävityksiä, ettei loki kasva liian nopeasti.
+		int errorBlock = 0;
+		while(true) try
 		{	sleep(10.seconds);
-			if(!globals.databaseOk) globals.connectDatabase();
+
+			if (errorBlock > 0) errorBlock--;
+			if(!globals.databaseOk)
+			{	if (auto e = globals.connectDatabase()) if(!errorBlock)
+				{	e.writeln();
+					errorBlock = 60;
+				}
+			}
 			globals.databaseAllowance = min
 			(	globals.databaseAllowance + config.databaseAllowancePerDsec,
 				config.databaseAllowanceMax
 			);
-		} catch(Exception) assert(false);
+		} catch(Exception e)
+		{	try
+			{	writeln("Ajastin kaatui -- ei pitäisi koskaan tapahtua!");
+				writeln(e);
+			} catch(Exception) {}
+			assert(false);
+		}
 	});
 
 	runApplication();
@@ -262,15 +280,16 @@ void main(string[] args)
 	};
 }
 
-@trusted bool connectDatabase(ref Globals globals)
+//Jos yhdistäminen onnistuu, tulos null.
+@trusted Exception connectDatabase(ref Globals globals)
 {	import dpq.connection;
 	import dpq.exception;
 	try
 	{	globals.database = Connection(config.database);
 		globals.databaseInitialised = true;
-		return true;
+		return null;
 	} catch(DPQException e)
-	{	return false;
+	{	return e;
 	}
 }
 

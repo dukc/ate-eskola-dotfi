@@ -11,6 +11,7 @@
 	"subConfigurations":
 	{	"vibe-stream:tls": "openssl-3.0"
 	},
+	"postBuildCommands": ["cp -r $DUB_BUILD_PATH/ate-eskola.fi  . "],
 	"description": "Palvelin *.ate-eskola.fi",
 	"license": "MIT",
 	"name": "ate-eskola-dotfi",

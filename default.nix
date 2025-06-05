@@ -1,5 +1,5 @@
 
-{pkgs, buildType ? "debug"}: let
+{pkgs, buildType ? "release"}: let
     dlang-nix = (import (pkgs.fetchFromGitHub {
         owner = "petarkirov";
         repo = "dlang-nix";
