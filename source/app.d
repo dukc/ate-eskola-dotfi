@@ -104,11 +104,11 @@ void main(string[] args)
 	{	// Jos ei nolla, ei kirjoiteta lokiin potentiaalisesti jatkuvasti
 		// toistuvia pävityksiä, ettei loki kasva liian nopeasti.
 		int errorBlock = 0;
-		while(true) try
+		for(ulong i = 0;;i++) try
 		{	sleep(10.seconds);
 
 			if (errorBlock > 0) errorBlock--;
-			if(!globals.databaseOk)
+			if(i % 4 == 0 || !globals.databaseOk)
 			{	if (auto e = globals.connectDatabase()) if(!errorBlock)
 				{	e.writeln();
 					errorBlock = 60;

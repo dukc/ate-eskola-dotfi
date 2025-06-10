@@ -84,8 +84,8 @@ $ERROR
 <form action="/vieraat/$PAGENUM" method="post">
     <h1> Kirjoita oma päiväyksesi </h1>
     <p>
-        <label for="name">Nimi</label>
-        <input type="text" id="name" name="name" value="$NAME" />
+        <label for="name">Nimi (pakollinen)</label>
+        <input type="text" id="name" name="name" value="$NAME" required />
     </p>
     <p>
         <label for="public_message">Julkiset terveiset</label><br />
